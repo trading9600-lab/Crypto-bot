@@ -1,8 +1,11 @@
 name: Crypto Signal Bot (MEXC)
 
 on:
+  # Automatic run every 5 minutes (UTC)
   schedule:
-    - cron: "*/5 * * * *"   # runs every 5 minutes (UTC)
+    - cron: "*/5 * * * *"
+
+  # Manual run button
   workflow_dispatch:
 
 concurrency:
@@ -15,29 +18,37 @@ jobs:
     timeout-minutes: 4
 
     steps:
-      # Step 1: Show trigger type (schedule or manual)
+      # 🔔 Send message when workflow starts
+      - name: Send workflow start message
+        run: |
+          MESSAGE="🚀 Crypto Signal Bot started
+Trigger: ${{ github.event_name }}
+Time (UTC): $(date -u)"
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+            -d text="$MESSAGE"
+
+      # Show trigger info in logs
       - name: Show trigger info
         run: |
           echo "Triggered by: ${{ github.event_name }}"
-          echo "UTC time:"
           date -u
 
-      # Step 2: Checkout repository code
+      # Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 3: Set up Python
+      # Setup Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.10"
 
-      # Step 4: Upgrade pip
+      # Upgrade pip
       - name: Upgrade pip
-        run: |
-          python -m pip install --upgrade pip
+        run: python -m pip install --upgrade pip
 
-      # Step 5: Install dependencies
+      # Install dependencies
       - name: Install dependencies
         run: |
           if [ -f requirements.txt ]; then
@@ -46,8 +57,7 @@ jobs:
             echo "No requirements.txt found"
           fi
 
-      # Step 6: Run crypto signal bot
+      # Run crypto signal bot
       - name: Run Crypto Signal Bot
-        run: |
-          python bot.py
-          
+        run: python bot.py
+        
