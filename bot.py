@@ -15,14 +15,13 @@ TOKEN = "8364584748:AAFeym3et4zJwmdKRxYtP3ieIKV8FuPWdQ8"
 CHAT_ID = "@Tradecocom"
 
 # ===============================
-# SETTINGS (UNCHANGED LOGIC)
+# SETTINGS (UNCHANGED)
 # ===============================
 PAIRS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT"]
 TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h", "1d"]
 
 EMA_FAST = 20
 EMA_SLOW = 50
-SWING_LOOKBACK = 15
 
 # ===============================
 # EXCHANGE
@@ -59,7 +58,7 @@ def get_data(symbol, timeframe):
     )
 
 # ===============================
-# SIGNAL CHECK (LOGIC UNCHANGED)
+# SIGNAL CHECK (EMA ONLY)
 # ===============================
 def check_signal(symbol, timeframe):
     df = get_data(symbol, timeframe)
@@ -73,19 +72,12 @@ def check_signal(symbol, timeframe):
     curr_slow = df["ema50"].iloc[-1]
 
     price = df["close"].iloc[-1]
-    swing_high = df["high"].iloc[-SWING_LOOKBACK:].max()
-    swing_low = df["low"].iloc[-SWING_LOOKBACK:].min()
-
     signal = None
 
     if prev_fast < prev_slow and curr_fast > curr_slow:
         signal = "🟢 BUY | EMA 20 Cross Above EMA 50"
     elif prev_fast > prev_slow and curr_fast < curr_slow:
         signal = "🔴 SELL | EMA 20 Cross Below EMA 50"
-    elif price > swing_high:
-        signal = "🚀 BULLISH BREAKOUT"
-    elif price < swing_low:
-        signal = "🩸 BEARISH BREAKDOWN"
 
     if signal:
         key = f"{symbol}-{timeframe}-{signal}"
@@ -111,9 +103,9 @@ def check_signal(symbol, timeframe):
 send_alert("✅ Crypto Signal Bot started successfully")
 
 # ===============================
-# RUN ONCE (CORRECT FOR GITHUB ACTIONS)
+# RUN ONCE (GITHUB ACTIONS)
 # ===============================
 for pair in PAIRS:
     for tf in TIMEFRAMES:
         check_signal(pair, tf)
-      
+        
