@@ -18,15 +18,12 @@ jobs:
     timeout-minutes: 4
 
     steps:
-      # 🔔 Send message when workflow starts
+      # 🔔 Send message when workflow starts (FIXED)
       - name: Send workflow start message
         run: |
-          MESSAGE="🚀 Crypto Signal Bot started
-Trigger: ${{ github.event_name }}
-Time (UTC): $(date -u)"
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d text="$MESSAGE"
+          -d chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
+          -d text="🚀 Crypto Signal Bot started | Trigger: ${{ github.event_name }} | UTC: $(date -u)"
 
       # Show trigger info in logs
       - name: Show trigger info
@@ -39,25 +36,5 @@ Time (UTC): $(date -u)"
         uses: actions/checkout@v4
 
       # Setup Python
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.10"
-
-      # Upgrade pip
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      # Install dependencies
-      - name: Install dependencies
-        run: |
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            echo "No requirements.txt found"
-          fi
-
-      # Run crypto signal bot
-      - name: Run Crypto Signal Bot
-        run: python bot.py
-        
+      - name: Set up Pyt
+      
