@@ -3,7 +3,7 @@ name: Crypto Signal Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"  # every 15 minutes (UTC)
+    - cron: "*/15 * * * *"   # every 15 minutes (UTC)
 
 concurrency:
   group: crypto-signal-bot
@@ -28,6 +28,5 @@ jobs:
           pip install ccxt pandas requests
 
       - name: 🚀 Run Crypto Signal Bot
-        run: |
-          python bot.py
-          
+        run: python bot.py
+        
