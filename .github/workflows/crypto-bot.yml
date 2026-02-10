@@ -3,7 +3,7 @@ name: Crypto Signal Bot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"   # every 15 minutes (UTC)
+    - cron: "*/5 * * * *"   # every 5 minutes (UTC)
 
 concurrency:
   group: crypto-signal-bot
