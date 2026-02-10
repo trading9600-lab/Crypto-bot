@@ -2,12 +2,11 @@ import ccxt
 import pandas as pd
 import requests
 from datetime import datetime, timezone
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ===============================
 # 🤖 BOT SOURCE
 # ===============================
-BOT_SOURCE = "GITHUB_ACTIONS"
+BOT_SOURCE = "GitHub Actions"
 
 # ===============================
 # 🔐 TELEGRAM (UNCHANGED)
@@ -16,7 +15,7 @@ TOKEN = "8364584748:AAFeym3et4zJwmdKRxYtP3ieIKV8FuPWdQ8"
 CHAT_ID = "@Tradecocom"
 
 # ===============================
-# ⚙️ SETTINGS
+# ⚙️ SETTINGS (UNCHANGED)
 # ===============================
 PAIRS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT"]
 TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h", "1d"]
@@ -25,96 +24,83 @@ EMA_FAST = 20
 EMA_SLOW = 50
 
 # ===============================
-# 🔁 EXCHANGE (FREE MEXC)
+# 🔁 EXCHANGE
 # ===============================
 exchange = ccxt.mexc({
     "enableRateLimit": True
 })
 
 # ===============================
-# 📨 TELEGRAM ALERT
+# 📨 TELEGRAM SEND
 # ===============================
-def send_alert(message):
-    try:
-        requests.post(
-            f"https://api.telegram.org/bot{TOKEN}/sendMessage",
-            json={
-                "chat_id": CHAT_ID,
-                "text": message
-            }
-        )
-    except:
-        pass
+def send_alert(text):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    requests.post(url, data={
+        "chat_id": CHAT_ID,
+        "text": text
+    })
 
 # ===============================
-# 📊 FETCH OHLCV (MINIMAL)
+# 📊 FETCH DATA
 # ===============================
-def fetch_data(symbol, timeframe):
-    candles = exchange.fetch_ohlcv(
-        symbol,
-        timeframe=timeframe,
-        limit=EMA_SLOW + 5
-    )
+def get_data(symbol, timeframe):
+    candles = exchange.fetch_ohlcv(symbol, timeframe, limit=100)
     return pd.DataFrame(
         candles,
         columns=["time", "open", "high", "low", "close", "volume"]
     )
 
 # ===============================
-# 🚀 EMA CROSS CHECK (CLOSED CANDLE)
+# 🚨 EMA CROSS (-1 / -2 FAST)
 # ===============================
 def check_signal(symbol, timeframe):
-    df = fetch_data(symbol, timeframe)
+    df = get_data(symbol, timeframe)
 
-    close = df["close"]
+    df["ema_fast"] = df["close"].ewm(span=EMA_FAST).mean()
+    df["ema_slow"] = df["close"].ewm(span=EMA_SLOW).mean()
 
-    ema_fast = close.ewm(span=EMA_FAST, adjust=False).mean()
-    ema_slow = close.ewm(span=EMA_SLOW, adjust=False).mean()
+    prev_fast = df["ema_fast"].iloc[-2]
+    prev_slow = df["ema_slow"].iloc[-2]
+    curr_fast = df["ema_fast"].iloc[-1]
+    curr_slow = df["ema_slow"].iloc[-1]
 
-    # ✅ ONLY CLOSED CANDLES
-    prev_fast = ema_fast.iloc[-3]
-    prev_slow = ema_slow.iloc[-3]
-    curr_fast = ema_fast.iloc[-2]
-    curr_slow = ema_slow.iloc[-2]
+    price = df["close"].iloc[-1]
 
-    price = close.iloc[-2]
-    utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    signal = None
 
     if prev_fast < prev_slow and curr_fast > curr_slow:
-        send_alert(
-            f"🟢 BUY | EMA 20 Cross Above EMA 50\n\n"
-            f"🤖 Source: {BOT_SOURCE}\n"
-            f"📊 Pair: {symbol}\n"
-            f"⏱ Timeframe: {timeframe}\n"
-            f"💰 Price: {price}\n"
-            f"🕒 UTC: {utc}"
-        )
-
+        signal = "🟢 BUY EMA CROSS (EARLY)"
     elif prev_fast > prev_slow and curr_fast < curr_slow:
-        send_alert(
-            f"🔴 SELL | EMA 20 Cross Below EMA 50\n\n"
-            f"🤖 Source: {BOT_SOURCE}\n"
+        signal = "🔴 SELL EMA CROSS (EARLY)"
+
+    if signal:
+        message = (
+            f"{signal}\n\n"
+            f"🤖 Source: {BOT_SOURCE}\n\n"
             f"📊 Pair: {symbol}\n"
             f"⏱ Timeframe: {timeframe}\n"
             f"💰 Price: {price}\n"
-            f"🕒 UTC: {utc}"
+            f"⚠️ Running candle (-1)\n"
+            f"🕒 UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
         )
+        send_alert(message)
 
 # ===============================
 # ▶️ MAIN
 # ===============================
 def main():
-    # Start message (once per run)
-    send_alert("✅ Crypto Signal Bot started successfully")
+    send_alert(
+        "✅ Crypto EMA Signal Bot Started\n\n"
+        f"🤖 Source: {BOT_SOURCE}\n"
+        "⚡ Mode: Fast (-1 / -2 EMA crossover)"
+    )
 
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        tasks = [
-            executor.submit(check_signal, pair, tf)
-            for pair in PAIRS
-            for tf in TIMEFRAMES
-        ]
-        for _ in as_completed(tasks):
-            pass
+    for pair in PAIRS:
+        for tf in TIMEFRAMES:
+            try:
+                check_signal(pair, tf)
+            except Exception as e:
+                print(f"Error {pair} {tf}: {e}")
 
 if __name__ == "__main__":
     main()
