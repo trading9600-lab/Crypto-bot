@@ -149,14 +149,16 @@ def main():
 
     state = load_state()
 
-    send_alert(
-        "✅ Crypto EMA Cross Bot Started\n\n"
-        f"🤖 Source: {BOT_SOURCE}\n"
-        "📊 Strategy: EMA 20 / 50 Fresh Crossover\n"
-        "🛡 Min Candles: 100\n"
-        "⏳ Cooldown: 10 Minutes\n"
-        f"🕒 UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
-    )
+    # ✅ Send startup message ONLY on manual run
+    if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
+        send_alert(
+            "✅ Crypto EMA Cross Bot Started\n\n"
+            f"🤖 Source: {BOT_SOURCE}\n"
+            "📊 Strategy: EMA 20 / 50 Fresh Crossover\n"
+            "🛡 Min Candles: 100\n"
+            "⏳ Cooldown: 10 Minutes\n"
+            f"🕒 UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
     for pair in PAIRS:
         for tf in TIMEFRAMES:
