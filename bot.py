@@ -1,9 +1,8 @@
 import ccxt
 import pandas as pd
 import requests
-import json
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 
 # ===============================
 # 🤖 BOT SOURCE
@@ -20,14 +19,11 @@ CHAT_ID = "@Tradecocom"
 # ⚙️ SETTINGS
 # ===============================
 PAIRS = ["BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT"]
-TIMEFRAMES = ["5m", "15m", "30m", "1h", "4h"]
+TIMEFRAMES = ["15m", "30m", "1h", "4h"]
 
 EMA_FAST = 20
 EMA_SLOW = 50
-COOLDOWN_MINUTES = 10
-MIN_CANDLES_REQUIRED = 100
-
-STATE_FILE = "signal_state.json"
+MIN_CANDLES = 150
 
 # ===============================
 # 🔁 EXCHANGE
@@ -35,19 +31,6 @@ STATE_FILE = "signal_state.json"
 exchange = ccxt.mexc({
     "enableRateLimit": True
 })
-
-# ===============================
-# 📂 STATE MANAGEMENT
-# ===============================
-def load_state():
-    if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_state(state):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f)
 
 # ===============================
 # 📩 TELEGRAM
@@ -59,77 +42,56 @@ def send_alert(text):
             "chat_id": CHAT_ID,
             "text": text
         }, timeout=15)
-    except:
-        pass
+    except Exception as e:
+        print("Telegram Error:", e)
 
 # ===============================
 # 📊 FETCH DATA
 # ===============================
 def get_data(symbol, timeframe):
     try:
-        candles = exchange.fetch_ohlcv(symbol, timeframe, limit=100)
+        candles = exchange.fetch_ohlcv(symbol, timeframe, limit=200)
         df = pd.DataFrame(
             candles,
             columns=["time", "open", "high", "low", "close", "volume"]
         )
         return df
-    except:
+    except Exception as e:
+        print("Fetch Error:", e)
         return None
 
 # ===============================
-# 🚨 FRESH CROSSOVER CHECK
+# 🚨 CROSSOVER LOGIC
 # ===============================
-def check_signal(symbol, timeframe, state):
+def check_signal(symbol, timeframe):
 
     df = get_data(symbol, timeframe)
-    if df is None or len(df) < MIN_CANDLES_REQUIRED:
+    if df is None or len(df) < MIN_CANDLES:
         return
 
     df["ema_fast"] = df["close"].ewm(span=EMA_FAST, adjust=False).mean()
     df["ema_slow"] = df["close"].ewm(span=EMA_SLOW, adjust=False).mean()
 
-    # Use CLOSED candles only (clean)
+    # Last 2 CLOSED candles
     prev_fast = df["ema_fast"].iloc[-3]
     prev_slow = df["ema_slow"].iloc[-3]
-    curr_fast = df["ema_fast"].iloc[-2]
-    curr_slow = df["ema_slow"].iloc[-2]
+
+    last_fast = df["ema_fast"].iloc[-2]
+    last_slow = df["ema_slow"].iloc[-2]
 
     price = df["close"].iloc[-2]
-    candle_time = df["time"].iloc[-2]
 
     signal = None
 
-    # Detect fresh cross
-    if prev_fast < prev_slow and curr_fast > curr_slow:
+    if prev_fast < prev_slow and last_fast > last_slow:
         signal = "BUY"
-    elif prev_fast > prev_slow and curr_fast < curr_slow:
+    elif prev_fast > prev_slow and last_fast < last_slow:
         signal = "SELL"
 
-    if not signal:
+    if signal is None:
         return
 
-    key = f"{symbol}_{timeframe}"
     now = datetime.now(timezone.utc)
-
-    # Prevent duplicates + cooldown
-    if key in state:
-        last_signal_time = datetime.fromisoformat(state[key]["alert_time"])
-        last_candle_time = state[key]["candle_time"]
-
-        # Same candle already alerted
-        if str(candle_time) == last_candle_time:
-            return
-
-        # Cooldown protection
-        if now - last_signal_time < timedelta(minutes=COOLDOWN_MINUTES):
-            return
-
-    # Save state
-    state[key] = {
-        "type": signal,
-        "alert_time": now.isoformat(),
-        "candle_time": str(candle_time)
-    }
 
     message = (
         f"{'🟢 BUY EMA CROSS' if signal=='BUY' else '🔴 SELL EMA CROSS'}\n\n"
@@ -141,30 +103,26 @@ def check_signal(symbol, timeframe, state):
     )
 
     send_alert(message)
+    print(f"Signal sent: {symbol} {timeframe} {signal}")
 
 # ===============================
 # ▶️ MAIN
 # ===============================
 def main():
 
-    state = load_state()
-
-    # ✅ Send startup message ONLY on manual run
+    # ✅ Send startup message ONLY when manually triggered
     if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
         send_alert(
             "✅ Crypto EMA Cross Bot Started\n\n"
             f"🤖 Source: {BOT_SOURCE}\n"
-            "📊 Strategy: EMA 20 / 50 Fresh Crossover\n"
-            "🛡 Min Candles: 100\n"
-            "⏳ Cooldown: 10 Minutes\n"
+            "📊 Strategy: EMA 20 / 50 Crossover\n"
+            "⏱ Timeframes: 15m, 30m, 1h, 4h\n"
             f"🕒 UTC: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}"
         )
 
     for pair in PAIRS:
         for tf in TIMEFRAMES:
-            check_signal(pair, tf, state)
-
-    save_state(state)
+            check_signal(pair, tf)
 
 if __name__ == "__main__":
     main()
